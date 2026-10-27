@@ -11,3 +11,4 @@ api-new/
 /.coverage
 /dev/kodi-boxes/.env
 /dev/kodi-boxes/data/
+.vscode
