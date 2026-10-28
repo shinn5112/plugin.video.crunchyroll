@@ -39,6 +39,9 @@ jobs:
   release:
     needs: sync
     runs-on: ubuntu-latest
+    outputs:
+      created: ${{ steps.mirror.outputs.created }}
+      tag: ${{ steps.mirror.outputs.tag }}
     env:
       GH_TOKEN: ${{ github.token }}
       UPSTREAM: smirgol/plugin.video.crunchyroll
@@ -50,6 +53,7 @@ jobs:
           fetch-depth: 0
 
       - name: Mirror latest stable upstream release
+        id: mirror
         run: |
           # "latest" excludes pre-releases and drafts
           release=$(gh api "repos/${UPSTREAM}/releases/latest")
@@ -73,3 +77,22 @@ jobs:
             --title "$name" \
             --notes-file notes.md \
             --latest
+          echo "created=true" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+  notify-repository:
+    needs: release
+    if: needs.release.outputs.created == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Kodi repository build
+        env:
+          # PAT with contents:write on the Kodi repository (releases made with
+          # GITHUB_TOKEN cannot trigger other workflows or repositories)
+          GH_TOKEN: ${{ secrets.KODI_REPO_TOKEN }}
+          KODI_REPO: ${{ vars.KODI_REPO || 'shinn5112/shinn5112-kodi-repo' }}
+        run: |
+          gh api "repos/${KODI_REPO}/dispatches" \
+            -f event_type=addon-release \
+            -f "client_payload[repository]=${GITHUB_REPOSITORY}" \
+            -f "client_payload[tag]=${{ needs.release.outputs.tag }}"
